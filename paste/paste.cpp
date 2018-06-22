@@ -28,23 +28,33 @@ void _free(T *obj)
 	HeapFree(GetProcessHeap(), 0, obj);
 }
 
-void Write(const wchar_t *text, DWORD outputHandle = STD_OUTPUT_HANDLE, DWORD length = -1)
-{
-	length = length != -1 ? length : lstrlen(text);
+HANDLE hOut;
+bool isConsole;
 
-	HANDLE hOut = GetStdHandle(outputHandle);
+void setupOutput(DWORD outputHandle) {
+	hOut = GetStdHandle(outputHandle);
 	if (hOut == INVALID_HANDLE_VALUE || hOut == nullptr)
 	{
 		ExitProcess((UINT)-1);
 	}
 	DWORD consoleMode;
-	bool isConsole = GetConsoleMode(hOut, &consoleMode) != 0;
+	isConsole = GetConsoleMode(hOut, &consoleMode) != 0;
+}
+	
+
+void Write(const wchar_t *text, DWORD length = -1)
+{
+	length = length != -1 ? length : lstrlen(text);
 
 	DWORD result = 0;
 	DWORD charsWritten = -1;
 	if (isConsole)
 	{
 		result = WriteConsoleW(hOut, text, length, &charsWritten, nullptr);
+	  if (result == 0)
+	  {
+		  ExitProcess((UINT)GetLastError());
+	  }
 	}
 	else
 	{
@@ -53,22 +63,18 @@ void Write(const wchar_t *text, DWORD outputHandle = STD_OUTPUT_HANDLE, DWORD le
 		auto utf8Bytes = _malloc<char>(utf8ByteCount);
 		WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text, -1, utf8Bytes, utf8ByteCount, nullptr, nullptr);
 		result = WriteFile(hOut, utf8Bytes, utf8ByteCount - 1 /* remove null */, &charsWritten, nullptr);
+		_free(utf8Bytes);
 		if (charsWritten != utf8ByteCount - 1)
 		{
-			ExitProcess(GetLastError());
+			ExitProcess((UINT)GetLastError());
 		}
-		_free(utf8Bytes);
-	}
-
-	if (result == 0)
-	{
-		ExitProcess((UINT)GetLastError());
 	}
 }
 
 void WriteError(const wchar_t *text)
 {
-	return Write(text, STD_ERROR_HANDLE);
+	setupOutput(STD_ERROR_HANDLE);
+	return Write(text);
 }
 
 bool ClipboardContainsFormat(UINT format)
@@ -90,6 +96,7 @@ void print(const WCHAR *text, LineEnding lineEnding)
 	if (text == nullptr || !*text) {
 		return;
 	}
+	setupOutput(STD_OUTPUT_HANDLE);
 	const WCHAR *ending = L"\n";
 	switch (lineEnding)
 	{
@@ -102,6 +109,7 @@ void print(const WCHAR *text, LineEnding lineEnding)
 				break;
 			}
 		}
+		for (; *text; text++) {}
 		break;
 	case LineEnding::Lf:
 		while (*text)
@@ -109,11 +117,11 @@ void print(const WCHAR *text, LineEnding lineEnding)
 			auto end = text;
 			while (*end && *end != L'\r') { end++; }
 			if (end > text) {
-				Write(text, STD_OUTPUT_HANDLE, (int)(end - text));
+				Write(text, (int)(end - text));
 			}
 			if (*end) {
 				end += end[1] == L'\n' ? 2 : 1;
-				Write(L"\n", STD_OUTPUT_HANDLE, 1);
+				Write(L"\n", 1);
 			}
 			text = end;
 		}
@@ -125,18 +133,18 @@ void print(const WCHAR *text, LineEnding lineEnding)
 			auto end = text;
 			while (*end && (*end == L'\n' ? end != text && end[-1] == L'\r' : *end != L'\r' || end[1] == L'\n')) { end++; }
 			if (end > text) {
-				Write(text, STD_OUTPUT_HANDLE, (int)(end - text));
+				Write(text, (int)(end - text));
 			}
 			if (*end) {
 				end++;
-				Write(L"\r\n", STD_OUTPUT_HANDLE, 2);
+				Write(L"\r\n", 2);
 			}
 			text = end;
 		}
 		break;
 	}
 	if (text[-1] != L'\n' && text[-1] != L'\r') {
-		Write(ending, STD_OUTPUT_HANDLE);
+		Write(ending);
 	}
 }
 
