@@ -66,11 +66,6 @@ void Write(const wchar_t *text, DWORD outputHandle = STD_OUTPUT_HANDLE, DWORD le
 	}
 }
 
-void Write(const wchar_t text, DWORD outputHandle = STD_OUTPUT_HANDLE)
-{
-	return Write(&text, outputHandle, 1);
-}
-
 void WriteError(const wchar_t *text)
 {
 	return Write(text, STD_ERROR_HANDLE);
@@ -92,30 +87,56 @@ bool ClipboardContainsFormat(UINT format)
 
 void print(const WCHAR *text, LineEnding lineEnding)
 {
+	if (text == nullptr || !*text) {
+		return;
+	}
+	const WCHAR *ending = L"\n";
 	switch (lineEnding)
 	{
 	case LineEnding::AsIs:
 		Write(text);
+		for (; *text; text++) {
+			if (*text == L'\n' || *text == L'\r') {
+				ending = *text == L'\n' ? L"\n" : text[1] == L'\n' ? L"\r\n" : L"\r";
+				text++;
+				break;
+			}
+		}
 		break;
 	case LineEnding::Lf:
-		for (auto ptr = text; ptr && *ptr; ++ptr)
+		while (*text)
 		{
-			if (*ptr != L'\r')
-			{
-				Write(ptr, STD_OUTPUT_HANDLE, 1);
+			auto end = text;
+			while (*end && *end != L'\r') { end++; }
+			if (end > text) {
+				Write(text, STD_OUTPUT_HANDLE, (int)(end - text));
 			}
+			if (*end) {
+				end += end[1] == L'\n' ? 2 : 1;
+				Write(L"\n", STD_OUTPUT_HANDLE, 1);
+			}
+			text = end;
 		}
 		break;
 	case LineEnding::CrLf:
-		for (auto ptr = text; ptr && *ptr; ++ptr)
+		ending = L"\r\n";
+		while (*text)
 		{
-			if (*ptr == L'\n' && (ptr == text || *(ptr -1) != L'\r'))
-			{
-				Write(L"\r", STD_OUTPUT_HANDLE, 1);
+			auto end = text;
+			while (*end && (*end == L'\n' ? end != text && end[-1] == L'\r' : *end != L'\r' || end[1] == L'\n')) { end++; }
+			if (end > text) {
+				Write(text, STD_OUTPUT_HANDLE, (int)(end - text));
 			}
-			Write(ptr, STD_OUTPUT_HANDLE, 1);
+			if (*end) {
+				end++;
+				Write(L"\r\n", STD_OUTPUT_HANDLE, 2);
+			}
+			text = end;
 		}
 		break;
+	}
+	if (text[-1] != L'\n' && text[-1] != L'\r') {
+		Write(ending, STD_OUTPUT_HANDLE);
 	}
 }
 
