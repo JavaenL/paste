@@ -5,7 +5,8 @@ enum class ExitReason : int
 	Success,
 	ClipboardError,
 	NoTextualData,
-	SystemError
+	SystemError,
+	ShowHelp,
 };
 
 enum class LineEnding : int
@@ -20,40 +21,44 @@ bool isConsole;
 #define BufferedChars (1) // 1M chars
 char utf8Bytes[1024 * 1024 * 3 * BufferedChars + 1024];
 
-static const char *err_msgs = "Failed to open systemClipboard contains non-textDUnable to get clipboard data";
+static const char *err_msgs = "Failed to open systemClipboard contains non-textDUnable to get clipboard data: --[cr]lf";
 constexpr int ERR_LEN_1 = 21;
 constexpr int ERR_LEN_2 = 27;
 constexpr int ERR_LEN_3 = 13;
 constexpr int ERR_LEN_4 = 10;
 constexpr int ERR_LEN_5 = 5;
+constexpr int ERR_LEN_6 = 10;
 constexpr int ERR_OFFSET_1 = 0;
 constexpr int ERR_OFFSET_2 = ERR_OFFSET_1 + ERR_LEN_1 + 0;
 constexpr int ERR_OFFSET_3 = ERR_OFFSET_2 + ERR_LEN_2 + 1;
 constexpr int ERR_OFFSET_4 = ERR_OFFSET_3 + ERR_LEN_3 + 0;
 constexpr int ERR_OFFSET_5 = ERR_OFFSET_4 + ERR_LEN_4 + 0;
+constexpr int ERR_OFFSET_6 = ERR_OFFSET_5 + ERR_LEN_5 + 0;
 
-void setupOutput(DWORD outputHandle) {
+int setupOutput(DWORD outputHandle, int lastError) {
 	hOut = GetStdHandle(outputHandle);
 	if (hOut == INVALID_HANDLE_VALUE || hOut == nullptr)
 	{
-		ExitProcess((UINT)-1);
+		ExitProcess((UINT)lastError);
+		return lastError;
 	}
 	DWORD consoleMode;
 	isConsole = GetConsoleMode(hOut, &consoleMode) != 0;
+	return 0;
 }
-	
 
-void Write(const wchar_t *text, int length)
+
+int Write(const wchar_t *text, int length)
 {
 	DWORD result = 0;
 	DWORD charsWritten = -1;
 	if (isConsole)
 	{
 		result = WriteConsoleW(hOut, text, (DWORD)length, &charsWritten, nullptr);
-	  if (result == 0)
-	  {
-		  ExitProcess((UINT)-2); // GetLastError()
-	  }
+		if (result == 0)
+		{
+			return -2; // GetLastError();
+		}
 	}
 	else
 	{
@@ -66,25 +71,32 @@ void Write(const wchar_t *text, int length)
 			text += part;
 			if (charsWritten != utf8ByteCount)
 			{
-				ExitProcess((UINT)-2); // GetLastError()
+				return -2; // GetLastError();
 			}
 		}
 	}
+	return 0;
 }
 
 void ExitWithError(ExitReason err, const char *text, int size)
 {
-	setupOutput(STD_ERROR_HANDLE);
+	if (setupOutput(STD_ERROR_HANDLE, (int)err)) {
+		return;
+	}
 	wchar_t *dest = (wchar_t *)(utf8Bytes + 1024 * 1024 * 3 * BufferedChars), *p2 = dest;
 	for (int i = 0; i < size; i++) {
 		*p2++ = (unsigned short)(unsigned char)*text++;
 	}
 	size = *text == 'C' ? ERR_LEN_4 : *text == 'D' ? ERR_LEN_5 : 0;
-	text = err_msgs + (*text == 'D' ? ERR_OFFSET_5 : ERR_OFFSET_4);
+	auto *text2 = err_msgs + (*text == 'D' ? ERR_OFFSET_5 : ERR_OFFSET_4);
 	for (int i = 0; i < size; i++) {
-		*p2++ = (unsigned short)(unsigned char)*text++;
+		*p2++ = (unsigned short)(unsigned char)*text2++;
 	}
-	*p2++ = L'!';
+	if (text - err_msgs < ERR_OFFSET_6) {
+		*p2++ = L'!';
+		size++;
+	}
+	*p2++ = L'\r';
 	*p2++ = L'\n';
 	size += 2;
 	Write(dest, (DWORD)(p2 - dest));
@@ -105,13 +117,16 @@ bool ClipboardContainsFormat(UINT format)
 	return false;
 }
 
-void print(const WCHAR *text, LineEnding lineEnding)
+int print(const WCHAR *text, LineEnding lineEnding)
 {
-	if (text == nullptr || !*text) {
-		return;
+	if (!*text) {
+		return 0;
 	}
-	setupOutput(STD_OUTPUT_HANDLE);
-	WCHAR ending[2] = { L'\n', L'\0' };
+	if (setupOutput(STD_OUTPUT_HANDLE, -1)) {
+		return -1;
+	}
+	int err = 0;
+	int ending = '\n\0\0\0';
 	const auto start = text;
 	switch (lineEnding)
 	{
@@ -119,51 +134,49 @@ void print(const WCHAR *text, LineEnding lineEnding)
 		for (; *text; text++) {
 			if (*text == L'\n' || *text == L'\r') {
 				if (*text == L'\r') {
-					ending[0] = L'\r';
-					if (text[1] == L'\n') {
-						ending[1] = L'\n';
-					}
+					ending = text[1] == L'\n' ? '\r\0\0\0' : '\r\0\n\0';
 				}
 				break;
 			}
 		}
 		for (; *text; text++) {}
-		Write(start, (DWORD)(text - start));
+		err = Write(start, (DWORD)(text - start));
 		break;
 	case LineEnding::CrLf:
-		ending[0] = L'\r'; ending[1] = L'\n';
-	case LineEnding::Lf:
+		ending = '\r\0\n\0';
+	default:
 		while (*text)
 		{
 			auto end = text;
 			while (*end && (lineEnding == LineEnding::Lf ? *end != L'\r' : *end == L'\n' ? end != text && end[-1] == L'\r' : *end != L'\r' || end[1] == L'\n')) { end++; }
 			if (end > text) {
-				Write(text, (int)(end - text));
+				err = Write(text, (int)(end - text));
 			}
 			if (*end) {
 				end += lineEnding == LineEnding::Lf && end[1] == L'\n' ? 2 : 1;
-				Write(ending, ending[1] ? 2 : 1);
+				err = Write((const WCHAR *)&ending, lineEnding == LineEnding::Lf ? 1 : 2);
 			}
 			text = end;
 		}
 		break;
 	}
 	if (text[-1] != L'\n' && text[-1] != L'\r') {
-		Write(ending, ending[1] ? 2 : 1);
+		Write((const WCHAR *)&ending, ending > 0xffff ? 2 : 1);
 	}
+	return err;
 }
 
-int wmain(void)
+void wmain(void)
 {
 	LineEnding lineEnding = LineEnding::AsIs;
+	HANDLE hData;
+	const wchar_t *text;
 	{
 		LPWSTR p = GetCommandLineW();
-		if (*p == L'"') {
-			while (*++p != L'"') {}
+		WCHAR chEnd = *p == L'"' ? '"' : ' ';
+		while (*++p != chEnd && *p != L'\0') {}
+		if (*p == '"' && chEnd == L'"') {
 			p++;
-		}
-		else {
-			while (*++p != L' ' && *p != L'\0') {}
 		}
 		for (; *p == L' '; p++) {}
 		if (p[0] == L'-' && p[1] == L'-') {
@@ -176,31 +189,37 @@ int wmain(void)
 				lineEnding = LineEnding::CrLf;
 			}
 		}
+		if (*p != L'\0' && lineEnding == LineEnding::AsIs) {
+			ExitWithError(ExitReason::ShowHelp, err_msgs + ERR_OFFSET_6, ERR_LEN_6);
+			return;
+		}
 	}
 
 	if (!OpenClipboard(nullptr))
 	{
 		ExitWithError(ExitReason::ClipboardError, err_msgs + ERR_OFFSET_1, ERR_LEN_1);
+		return;
 	}
 
 	if (!ClipboardContainsFormat(CF_UNICODETEXT))
 	{
 		CloseClipboard();
-		ExitWithError(ExitReason::NoTextualData,  err_msgs + ERR_OFFSET_2, ERR_LEN_2);
+		ExitWithError(ExitReason::NoTextualData,	err_msgs + ERR_OFFSET_2, ERR_LEN_2);
+		return;
 	}
 
-	HANDLE hData = GetClipboardData(CF_UNICODETEXT);
-	const wchar_t *text;
-	if (hData == INVALID_HANDLE_VALUE || hData == nullptr || (text = (const wchar_t *)GlobalLock(hData)) == nullptr)
+	hData = GetClipboardData(CF_UNICODETEXT);
+	if (hData == nullptr || hData == INVALID_HANDLE_VALUE || (text = (const wchar_t *)GlobalLock(hData)) == nullptr)
 	{
 		CloseClipboard();
 		ExitWithError(ExitReason::ClipboardError, err_msgs + ERR_OFFSET_3, ERR_LEN_3 + ERR_LEN_4 + ERR_LEN_5);
+		return;
 	}
 
-	print(text, lineEnding);
+	int err = print(text, lineEnding);
 
 	GlobalUnlock(hData);
 	CloseClipboard();
 
-	ExitProcess((UINT)ExitReason::Success);
+	ExitProcess(err == 0 ? (UINT)ExitReason::Success : (UINT)err);
 }

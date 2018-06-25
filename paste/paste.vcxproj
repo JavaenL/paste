@@ -162,6 +162,7 @@
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <CreateHotpatchableImage>false</CreateHotpatchableImage>
       <DebugInformationFormat>None</DebugInformationFormat>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -175,6 +176,7 @@
       <MergeSections>.pdata=.text</MergeSections>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <UACUIAccess />
+      <AssemblyDebug>false</AssemblyDebug>
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
     </Link>
     <Manifest>
