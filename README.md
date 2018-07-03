@@ -18,11 +18,11 @@ x-clip: [-a|--ansi[i] | -u|--ucs2|--unicode] <<< DATA
 
 Examples:
 ``` bash
-$ x-clip < utf8.txt # tail line endings are always trimmed
+$ xclip < utf8.txt # tail line endings are always trimmed
 $ cat uincode-list.txt | x-clip -u
-$ x-clip -- here is a line to copy
-$ x-clip here is another line to copy
-$ x-clip --help # equals with empty arguments
+$ xclip -- here is a line to copy
+$ xclip here is another line to copy
+$ xclip --help # equals with empty arguments
 ```
 
 # license
