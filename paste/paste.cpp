@@ -27,13 +27,13 @@ constexpr int ERR_LEN_2 = 27;
 constexpr int ERR_LEN_3 = 13;
 constexpr int ERR_LEN_4 = 10;
 constexpr int ERR_LEN_5 = 5;
-constexpr int ERR_LEN_6 = 10;
 constexpr int ERR_OFFSET_1 = 0;
 constexpr int ERR_OFFSET_2 = ERR_OFFSET_1 + ERR_LEN_1 + 0;
 constexpr int ERR_OFFSET_3 = ERR_OFFSET_2 + ERR_LEN_2 + 1;
 constexpr int ERR_OFFSET_4 = ERR_OFFSET_3 + ERR_LEN_3 + 0;
 constexpr int ERR_OFFSET_5 = ERR_OFFSET_4 + ERR_LEN_4 + 0;
-constexpr int ERR_OFFSET_6 = ERR_OFFSET_5 + ERR_LEN_5 + 0;
+constexpr int ERR_OFFSET_6 = ERR_OFFSET_3 + 10;
+constexpr int ERR_LEN_6 = ERR_OFFSET_5 + ERR_LEN_5 + 10 - ERR_OFFSET_6;
 
 int setupOutput(DWORD outputHandle, int lastError) {
 	hOut = GetStdHandle(outputHandle);
