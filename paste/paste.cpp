@@ -134,7 +134,7 @@ int print(const WCHAR *text, LineEnding lineEnding)
 		for (; *text; text++) {
 			if (*text == L'\n' || *text == L'\r') {
 				if (*text == L'\r') {
-					ending = text[1] == L'\n' ? '\r\0\0\0' : '\r\0\n\0';
+					ending = text[1] == L'\n' ? '\r\0\n\0' : '\r\0\0\0';
 				}
 				break;
 			}
