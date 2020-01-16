@@ -48,7 +48,7 @@ static __forceinline void _Write(DWORD handleId, const wchar_t *text, long long 
     {
       char *p2 = buffer2;
       for (int i = 0; i < length; i++) {
-        const unsigned short w = text[i];
+        unsigned short w = text[i];
 #if USE_LOCAL_ERROR_MESSAGE
         if (w <= 0x7f) {
           *p2++ = (char)w;
@@ -58,7 +58,16 @@ static __forceinline void _Write(DWORD handleId, const wchar_t *text, long long 
           *p2++ = 0x80 | (w & 0x3f);
         }
         else {
-          *p2++ = 0xe0 | ((w >> 12) & 0x0f);
+          if (0 && w >= 0xd800 && w < 0xdc00 && i < length - 1) {
+            unsigned int point = ((w - 0xd800) << 10) | ((text[++i] - 0xdc00) & 0x3ff) + 0x10000;
+            *p2++ = 0xf0 | ((point >> 18) & 0x08);
+            *p2++ = 0x80 | ((point >> 12) & 0x3f);
+            w = (unsigned short)point;
+          }
+          else
+          {
+            *p2++ = 0xe0 | ((w >> 12) & 0x0f);
+          }
           *p2++ = 0x80 | ((w >> 6) & 0x3f);
           *p2++ = 0x80 | (w & 0x3f);
         }
@@ -216,13 +225,14 @@ l_arg_parsed:
         // here strips tail /\r\n/
         if (dataType == DataType::ANSII) {
           while (*--p == '\n' || *p == '\r') {}
+          p[1] = '\0';
         }
         else {
           do {
             p = (char*)((wchar_t *)p - 1);
           } while (*(wchar_t *)p == L'\n' || *(wchar_t *)p == L'\r');
+          ((wchar_t *)p)[1] = L'\0';
         }
-        p[1] = '\0'; p[2] = '\0';
         //output[input_len] = '\0'; output[input_len + 1] = '\0';
         GlobalUnlock(hData);
         succeed = SetClipboardData(dataType == DataType::ANSII ? CF_TEXT : CF_UNICODETEXT, hData) != NULL;
